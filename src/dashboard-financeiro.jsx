@@ -484,30 +484,18 @@ export default function FinanceiroDashboard() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 32 }}>
-              <div>
-                <h2 style={{ fontSize: "2rem", marginBottom: 24, paddingBottom: 16, borderBottom: "var(--stroke)" }}>
-                   Lançamentos de {MONTHS[selectedMonth]}
-                </h2>
-                
-                {monthExpenses.length === 0 ? (
-                  <div className="neo-card" style={{ textAlign: "center", padding: "64px 20px", backgroundColor: "#ffffff" }}>
-                    <h3>Nenhuma despesa para este mês.</h3>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    
-                    {fixas.length > 0 && <ListSection title={<><span className="material-symbols-outlined">lock</span> Fixas</>} items={fixas} onDelete={deleteExpense} accentColor="var(--error)" />}
-                    {variaveis.length > 0 && <ListSection title={<><span className="material-symbols-outlined">sync_alt</span> Variáveis</>} items={variaveis} onDelete={deleteExpense} accentColor="var(--secondary)" />}
-                    {cartoes.length > 0 && <ListSection title={<><span className="material-symbols-outlined">credit_card</span> Cartões de Crédito</>} items={cartoes} onDelete={deleteExpense} accentColor="var(--tertiary)" />}
-
-                  </div>
-                )}
-                
-                {monthIncomes.length > 0 && (
-                  <div style={{ marginTop: 32 }}>
-                    <h3 style={{ fontSize: "1.2rem", fontWeight: 800, marginBottom: 12, display: "inline-flex", alignItems: "center", gap: 8, borderBottom: "4px solid var(--secondary)" }}>
-                      <span className="material-symbols-outlined">payments</span> Receitas
-                    </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
+                {/* --- RECEITAS --- */}
+                <div>
+                  <h2 style={{ fontSize: "2rem", marginBottom: 24, paddingBottom: 16, borderBottom: "4px solid var(--secondary)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="material-symbols-outlined">payments</span> Receitas
+                  </h2>
+                  
+                  {monthIncomes.length === 0 ? (
+                    <div className="neo-card" style={{ textAlign: "center", padding: "40px 20px", backgroundColor: "#ffffff" }}>
+                      <h3>Nenhuma receita para este mês.</h3>
+                    </div>
+                  ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       {monthIncomes.map(inc => (
                         <div key={inc.id} className="neo-card" style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, backgroundColor: "#ffffff" }}>
@@ -516,15 +504,33 @@ export default function FinanceiroDashboard() {
                             <div style={{ fontSize: "1.2rem", fontWeight: 700 }}>{inc.name}</div>
                             <div className="tag-chip" style={{ display: "inline-block", marginTop: 4 }}>{inc.type}</div>
                           </div>
-                          <span style={{ fontSize: "1.5rem", fontWeight: 800 }}>
+                          <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--secondary)" }}>
                             + R$ {inc.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </span>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
+                {/* --- DESPESAS --- */}
+                <div>
+                  <h2 style={{ fontSize: "2rem", marginBottom: 24, paddingBottom: 16, borderBottom: "4px solid var(--error)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="material-symbols-outlined">receipt_long</span> Despesas
+                  </h2>
+                  
+                  {monthExpenses.length === 0 ? (
+                    <div className="neo-card" style={{ textAlign: "center", padding: "40px 20px", backgroundColor: "#ffffff" }}>
+                      <h3>Nenhuma despesa para este mês.</h3>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {fixas.length > 0 && <ListSection title={<><span className="material-symbols-outlined">lock</span> Fixas</>} items={fixas} onDelete={deleteExpense} accentColor="var(--error)" />}
+                      {variaveis.length > 0 && <ListSection title={<><span className="material-symbols-outlined">sync_alt</span> Variáveis</>} items={variaveis} onDelete={deleteExpense} accentColor="var(--secondary)" />}
+                      {cartoes.length > 0 && <ListSection title={<><span className="material-symbols-outlined">credit_card</span> Cartões de Crédito</>} items={cartoes} onDelete={deleteExpense} accentColor="var(--tertiary)" />}
+                    </div>
+                  )}
+                </div>
               </div>
               
               {/* Resumo Lateral */}
