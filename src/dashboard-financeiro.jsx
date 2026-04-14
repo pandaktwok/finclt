@@ -26,22 +26,35 @@ const CURRENT_YEAR = now.getFullYear();
 export default function FinanceiroDashboard() {
   const [expenses, setExpenses] = useState([]);
   const [incomes, setIncomes] = useState([]);
+  const [creditCards, setCreditCards] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [showCardManagerModal, setShowCardManagerModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(CURRENT_MONTH);
   const [activeTab, setActiveTab] = useState("visao");
 
   // Form state (despesas)
-  const [form, setForm] = useState({
+  const defaultForm = {
     id: null,
     entryType: "boleto",
     name: "", type: "fixa", subtype: "serviços",
     amount: "", months: 12, startMonth: CURRENT_MONTH,
     color: "",
     dueDay: 10,
-    monthlyTotals: {},
+  };
+  const [form, setForm] = useState(defaultForm);
+
+  const defaultInvoiceForm = {
+    id: null,
+    cardId: null,
+    totalValue: "", // Fatura Total
+    month: CURRENT_MONTH, // Mês de referência
     creditItems: [{ category: "Outros", desc: "", amount: "", type: "variavel", months: 1, itemStartMonth: CURRENT_MONTH }]
-  });
+  };
+  const [invoiceForm, setInvoiceForm] = useState(defaultInvoiceForm);
+
+  const [cardForm, setCardForm] = useState({ id: null, name: "", dueDay: 10, color: "" });
 
   // Form state (receitas)
   const defaultIncomeForm = {
@@ -58,6 +71,8 @@ export default function FinanceiroDashboard() {
     if (saved) try { setExpenses(JSON.parse(saved)); } catch {}
     const savedInc = localStorage.getItem("finctl-incomes");
     if (savedInc) try { setIncomes(JSON.parse(savedInc)); } catch {}
+    const savedCards = localStorage.getItem("finctl-cards");
+    if (savedCards) try { setCreditCards(JSON.parse(savedCards)); } catch {}
   }, []);
   useEffect(() => {
     localStorage.setItem("finctl-expenses", JSON.stringify(expenses));
@@ -65,30 +80,48 @@ export default function FinanceiroDashboard() {
   useEffect(() => {
     localStorage.setItem("finctl-incomes", JSON.stringify(incomes));
   }, [incomes]);
+  useEffect(() => {
+    localStorage.setItem("finctl-cards", JSON.stringify(creditCards));
+  }, [creditCards]);
 
   // Fechar modais com Escape
   useEffect(() => {
-    if (!showModal && !showIncomeModal) return;
     const handler = (e) => {
-      if (e.key === "Escape") { setShowModal(false); setShowIncomeModal(false); }
+      if (e.key === "Escape") { 
+         setShowModal(false); 
+         setShowIncomeModal(false); 
+         setShowCardManagerModal(false);
+         setShowInvoiceModal(false);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [showModal, showIncomeModal]);
+  }, []);
 
   function openModal() {
     const autoColor = getUnusedColor(usedColors);
     setForm({
-      id: null,
-      entryType: "boleto",
-      name: "", type: "fixa", subtype: "serviços",
-      amount: "", months: 12, startMonth: CURRENT_MONTH,
+      ...defaultForm,
       color: autoColor,
-      dueDay: 10,
-      monthlyTotals: {},
-      creditItems: [{ category: "Outros", desc: "", amount: "", type: "variavel", months: 1, itemStartMonth: CURRENT_MONTH }]
     });
     setShowModal(true);
+  }
+
+  function openCardManager() {
+    setCardForm({ id: null, name: "", dueDay: 10, color: getUnusedColor(usedColors) });
+    setShowCardManagerModal(true);
+  }
+
+  function openInvoiceModal(cardId, existingInvoice = null) {
+    if (existingInvoice) {
+       setInvoiceForm(existingInvoice);
+    } else {
+       setInvoiceForm({
+         ...defaultInvoiceForm,
+         cardId: cardId,
+       });
+    }
+    setShowInvoiceModal(true);
   }
 
   function selectRegisteredCard(cardExp) {
@@ -205,6 +238,79 @@ export default function FinanceiroDashboard() {
     setIncomes(prev => prev.filter(i => i.id !== id));
   }
 
+  // ---- Cartões e Faturas ----
+  function handleCardFormChange(field, value) {
+    setCardForm(f => ({ ...f, [field]: value }));
+  }
+
+  function saveCard() {
+    if (!cardForm.name) return;
+    const cardObj = {
+      id: cardForm.id || "card-" + Date.now(),
+      name: cardForm.name,
+      dueDay: parseInt(cardForm.dueDay) || 10,
+      color: cardForm.color || "#000000",
+      creditItems: [],
+      monthlyTotals: {}
+    };
+    if (cardForm.id) {
+      setCreditCards(prev => prev.map(c => c.id === cardForm.id ? { ...c, name: cardObj.name, dueDay: cardObj.dueDay, color: cardObj.color } : c));
+    } else {
+      setCreditCards(prev => [...prev, cardObj]);
+    }
+    setShowCardManagerModal(false);
+  }
+
+  function deleteCard(id) {
+    setCreditCards(prev => prev.filter(c => c.id !== id));
+  }
+  
+  function handleInvoiceFormChange(field, value) {
+    setInvoiceForm(f => ({ ...f, [field]: value }));
+  }
+
+  function addInvoiceCreditItem() {
+    setInvoiceForm(f => ({ ...f, creditItems: [...f.creditItems, { category: "Outros", desc: "", amount: "", type: "variavel", itemStartMonth: f.month, months: 1 }] }));
+  }
+
+  function updateInvoiceCreditItem(idx, field, value) {
+    setInvoiceForm(f => {
+      const items = [...f.creditItems];
+      items[idx] = { ...items[idx], [field]: value };
+      if (field === "type" && value === "fixa") {
+         items[idx].months = 12;
+      }
+      return { ...f, creditItems: items };
+    });
+  }
+
+  function removeInvoiceCreditItem(idx) {
+    setInvoiceForm(f => ({ ...f, creditItems: f.creditItems.filter((_, i) => i !== idx) }));
+  }
+
+  function saveInvoice() {
+    const cardId = invoiceForm.cardId;
+    if (!cardId) return;
+
+    setCreditCards(prev => prev.map(card => {
+       if (card.id !== cardId) return card;
+       // We append the new credit items that don't already exist. 
+       // But wait, the invoiceForm.creditItems usually contains only the NEW items the user is adding, OR we are editing?
+       // Currently, adding an invoice means we provide what's in that specific invoice. 
+       // If it's a completely new invoice form iteration, it just has empty array initially.
+       const newItems = invoiceForm.creditItems.filter(i => i.desc || i.amount); // only non-empty
+       let updatedItems = [...(card.creditItems || []), ...newItems];
+
+       const updatedTotals = { ...card.monthlyTotals };
+       if (invoiceForm.totalValue) {
+          updatedTotals[invoiceForm.month] = parseFloat(invoiceForm.totalValue) || 0;
+       }
+
+       return { ...card, creditItems: updatedItems, monthlyTotals: updatedTotals };
+    }));
+    setShowInvoiceModal(false);
+  }
+
   function getMonthIncomes(monthIdx) {
     return incomes.filter(inc => {
       const { startMonth, endMonth } = inc;
@@ -223,8 +329,8 @@ export default function FinanceiroDashboard() {
   }
 
   const getMonthExpenses = useCallback((monthIdx) => {
-    return expenses.map(e => {
-      if (e.entryType === "cartao") { // Dynamically filter items for this month context
+    const legacyExpenses = expenses.map(e => {
+      if (e.entryType === "cartao") { 
         const activeItems = (e.creditItems || []).filter(i => isItemActive(i, monthIdx, e.startMonth));
         let sumActive = activeItems.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
         
@@ -234,36 +340,61 @@ export default function FinanceiroDashboard() {
         if (invoiceTotal > sumActive) {
           activeItems.push({
             category: "Outros", desc: "Não detalhado", amount: (invoiceTotal - sumActive).toFixed(2),
-            type: "variavel", months: 1, itemStartMonth: monthIdx, isVirtual: true
+            type: "variavel", itemStartMonth: monthIdx, isVirtual: true
           });
           sumActive = invoiceTotal;
         }
 
-        return { 
-          ...e, 
-          creditItems: activeItems, 
-          amount: sumActive 
-        };
+        return { ...e, creditItems: activeItems, amount: sumActive };
       }
       return e;
     }).filter(e => {
       if (e.entryType === "cartao") return e.creditItems.length > 0;
-      // Normal filter
       const end = (e.startMonth + e.months - 1) % 12;
       const wraps = (e.startMonth + e.months - 1) > 11;
       if (!wraps) return monthIdx >= e.startMonth && monthIdx <= end;
       return monthIdx >= e.startMonth || monthIdx <= end;
     });
-  }, [expenses]);
+
+    const eternalCards = creditCards.map(card => {
+        const activeItems = (card.creditItems || []).filter(i => isItemActive(i, monthIdx, i.itemStartMonth));
+        let sumActive = activeItems.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+        
+        const invoiceObj = card.monthlyTotals || {};
+        const invoiceTotal = parseFloat(invoiceObj[monthIdx]) || 0;
+        
+        if (invoiceTotal > sumActive) {
+          activeItems.push({
+            category: "Outros", desc: "Não detalhado", amount: (invoiceTotal - sumActive).toFixed(2),
+            type: "variavel", itemStartMonth: monthIdx, isVirtual: true
+          });
+          sumActive = invoiceTotal;
+        }
+
+        return {
+           id: card.id + "-invoice-" + monthIdx,
+           originalCardId: card.id,
+           entryType: "novo_cartao",
+           name: card.name,
+           color: card.color,
+           dueDay: card.dueDay,
+           amount: sumActive,
+           creditItems: activeItems,
+           type: "cartao"
+        };
+    }).filter(c => c.creditItems.length > 0);
+
+    return [...legacyExpenses, ...eternalCards];
+  }, [expenses, creditCards]);
 
   const monthExpenses = useMemo(() => getMonthExpenses(selectedMonth), [getMonthExpenses, selectedMonth]);
   const totalMonth = useMemo(() => monthExpenses.reduce((s, e) => s + e.amount, 0), [monthExpenses]);
   const fixaTotal = useMemo(() => monthExpenses.reduce((s, e) => {
-    if (e.entryType === "cartao") return s + (e.creditItems || []).filter(i => i.type === "fixa").reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    if (e.entryType === "cartao" || e.entryType === "novo_cartao") return s + (e.creditItems || []).filter(i => i.type === "fixa").reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
     return e.type === "fixa" ? s + e.amount : s;
   }, 0), [monthExpenses]);
   const varTotal = useMemo(() => monthExpenses.reduce((s, e) => {
-    if (e.entryType === "cartao") return s + (e.creditItems || []).filter(i => i.type !== "fixa").reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    if (e.entryType === "cartao" || e.entryType === "novo_cartao") return s + (e.creditItems || []).filter(i => i.type !== "fixa").reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
     return e.type === "variavel" ? s + e.amount : s;
   }, 0), [monthExpenses]);
 
@@ -284,7 +415,7 @@ export default function FinanceiroDashboard() {
   const { fixas, variaveis, cartoes } = useMemo(() => ({
     fixas: monthExpenses.filter(e => e.type === "fixa"),
     variaveis: monthExpenses.filter(e => e.type === "variavel"),
-    cartoes: monthExpenses.filter(e => e.entryType === "cartao"),
+    cartoes: monthExpenses.filter(e => e.entryType === "cartao" || e.entryType === "novo_cartao"),
   }), [monthExpenses]);
 
   // Available colors
@@ -329,10 +460,13 @@ export default function FinanceiroDashboard() {
           </h1>
         </div>
         <div style={{ display: "flex", gap: 12 }}>
-          <button className="neo-btn" style={{ backgroundColor: "var(--secondary)", display: "flex", alignItems: "center", gap: 8 }} onClick={() => openIncomeModal()}>
+          <button className="neo-btn" style={{ backgroundColor: "#e2e8f0", display: "flex", alignItems: "center", gap: 4 }} onClick={() => openCardManager()}>
+            <span className="material-symbols-outlined">credit_card</span> Cartões
+          </button>
+          <button className="neo-btn" style={{ backgroundColor: "var(--secondary)", display: "flex", alignItems: "center", gap: 4 }} onClick={() => openIncomeModal()}>
             <span className="material-symbols-outlined">add</span> Receita
           </button>
-          <button className="neo-btn" style={{ backgroundColor: "var(--primary)", display: "flex", alignItems: "center", gap: 8 }} onClick={openModal}>
+          <button className="neo-btn" style={{ backgroundColor: "var(--primary)", display: "flex", alignItems: "center", gap: 4 }} onClick={openModal}>
             <span className="material-symbols-outlined">add</span> Despesa
           </button>
         </div>
@@ -730,7 +864,7 @@ export default function FinanceiroDashboard() {
               
               <Field label="Tipo de Cadastro">
                 <div style={{ display: "flex", gap: 12 }}>
-                  {[["boleto","Boleto"],["extra","Despesa Extra"],["cartao","Cartão"]].map(([val, lab]) => (
+                  {[["boleto","Boleto"],["extra","Despesa Extra"], ...(form.entryType === "cartao" ? [["cartao","Cartão (Legado)"]] : [])].map(([val, lab]) => (
                     <button key={val} onClick={() => handleFormChange("entryType", val)} style={{
                       flex: 1, backgroundColor: form.entryType === val ? "var(--primary)" : "#ffffff",
                       border: "var(--stroke)", borderRadius: "var(--radius-md)",
@@ -934,6 +1068,167 @@ export default function FinanceiroDashboard() {
               <button onClick={() => setShowIncomeModal(false)} className="neo-btn" style={{ backgroundColor: "#ffffff", flex: 1 }}>Cancelar</button>
               <button onClick={saveIncome} className="neo-btn" style={{ backgroundColor: "var(--secondary)", flex: 2 }}>{incomeForm.id ? "Atualizar" : "Salvar"}</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Gerenciar Cartões */}
+      {showCardManagerModal && (
+        <div className="modal-backdrop">
+          <div className="neo-modal" style={{ maxWidth: 800 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32, borderBottom: "var(--stroke)", paddingBottom: 16 }}>
+              <h2 style={{ fontSize: "2rem", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="material-symbols-outlined">credit_card</span> Gerenciar Cartões
+              </h2>
+              <button onClick={() => setShowCardManagerModal(false)} className="neo-btn" style={{ padding: "8px", backgroundColor: "#ffffff" }}>
+                 <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 40 }}>
+               {/* Formulário Novo/Editar Cartão */}
+               <div className="neo-card" style={{ backgroundColor: "var(--surface-low)", padding: 24 }}>
+                 <h3 style={{ marginBottom: 16 }}>{cardForm.id ? "Editar Cartão" : "Novo Cartão ETERNO"}</h3>
+                 <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 16, alignItems: "end" }}>
+                   <Field label="Nome do Cartão">
+                     <Input value={cardForm.name} onChange={v => handleCardFormChange("name", v)} placeholder="Ex: Nubank, Itaú..." />
+                   </Field>
+                   <Field label="Vencimento (Dia 1-31)">
+                     <Input value={cardForm.dueDay} onChange={v => handleCardFormChange("dueDay", v)} type="number" />
+                   </Field>
+                   <Field label="Cor Identificadora">
+                     <select className="neo-select" value={cardForm.color} onChange={e => handleCardFormChange("color", e.target.value)} style={{ padding: 12 }}>
+                       {PALETTE.map(c => <option key={c} value={c}>{c}</option>)}
+                     </select>
+                   </Field>
+                 </div>
+                 <div style={{ display: "flex", gap: 16, marginTop: 24 }}>
+                   {cardForm.id && <button onClick={() => setCardForm({ id: null, name: "", dueDay: 10, color: getUnusedColor(usedColors) })} className="neo-btn" style={{ backgroundColor: "#ffffff", padding: "8px 16px" }}>Cancelar Edição</button>}
+                   <button onClick={saveCard} className="neo-btn" style={{ backgroundColor: "var(--tertiary)", flex: 1 }}>{cardForm.id ? "Atualizar Cartão" : "Cadastrar Cartão"}</button>
+                 </div>
+               </div>
+
+               {/* Lista de Cartões Existentes */}
+               <div>
+                  <h3 style={{ marginBottom: 16, borderBottom: "2px solid var(--stroke)", paddingBottom: 8 }}>Cartões Cadastrados</h3>
+                  {creditCards.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: "center", border: "2px dashed var(--stroke)" }}>Nenhum cartão eterno cadastrado.</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 300, overflowY: "auto" }}>
+                      {creditCards.map(c => (
+                        <div key={c.id} className="neo-card" style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, backgroundColor: "#ffffff" }}>
+                           <div style={{ width: 16, height: 16, backgroundColor: c.color, border: "2px solid #000", borderRadius: "50%", flexShrink: 0 }} />
+                           <div style={{ flex: 1 }}>
+                             <div style={{ fontSize: "1.2rem", fontWeight: 700 }}>{c.name}</div>
+                             <div className="tag-chip" style={{ display: "inline-block", marginTop: 4 }}>Vence dia: {c.dueDay}</div>
+                           </div>
+                           <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => { setShowCardManagerModal(false); openInvoiceModal(c.id); }} className="neo-btn" style={{ backgroundColor: "var(--primary)", padding: "8px 16px", display: "flex", alignItems: "center", gap: 4 }}>
+                                <span className="material-symbols-outlined">receipt_long</span> Lançar Fatura
+                              </button>
+                              <button onClick={() => setCardForm({ id: c.id, name: c.name, dueDay: c.dueDay, color: c.color })} className="neo-btn" style={{ backgroundColor: "var(--warning)", padding: "8px 16px" }}>Editar</button>
+                              <button onClick={() => { if(confirm("Deseja realmente apagar o cartão? O histórico será perdido.")) deleteCard(c.id) }} className="neo-btn" style={{ backgroundColor: "var(--error)", padding: "8px 16px" }}>Excluir</button>
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Fatura */}
+      {showInvoiceModal && (
+        <div className="modal-backdrop">
+          <div className="neo-modal" style={{ maxWidth: 800 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32, borderBottom: "var(--stroke)", paddingBottom: 16 }}>
+              <h2 style={{ fontSize: "2rem", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="material-symbols-outlined">receipt_long</span> Lançar Itens na Fatura
+              </h2>
+              <button onClick={() => setShowInvoiceModal(false)} className="neo-btn" style={{ padding: "8px", backgroundColor: "#ffffff" }}>
+                 <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {(() => {
+               const targetCard = creditCards.find(c => c.id === invoiceForm.cardId);
+               if (!targetCard) return <div>Cartão deletado ou não encontrado.</div>;
+               
+               return (
+                 <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                   <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                     <div style={{ width: 24, height: 24, backgroundColor: targetCard.color, border: "2px solid #000", borderRadius: "50%" }}></div>
+                     <span style={{ fontSize: "1.5rem", fontWeight: 800 }}>{targetCard.name}</span>
+                   </div>
+
+                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                     <div className="neo-card" style={{ backgroundColor: "var(--surface-low)", padding: 16 }}>
+                       <Field label="Mês de Referência para Lançamento">
+                         <select className="neo-select" value={invoiceForm.month} onChange={e => handleInvoiceFormChange("month", parseInt(e.target.value))}>
+                           {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                         </select>
+                       </Field>
+                     </div>
+                     <div className="neo-card" style={{ backgroundColor: "var(--primary)", padding: 16 }}>
+                       <Field label="Valor Total Fechado da Fatura (Opcional)">
+                         <Input value={invoiceForm.totalValue} onChange={v => handleInvoiceFormChange("totalValue", v)} type="number" placeholder="Fatura total atual" style={{ backgroundColor: "#ffffff" }} />
+                       </Field>
+                       <div style={{ fontSize: "0.8rem", marginTop: 8 }}>Se o total for maior que a soma Pessoal dos itens abaixo, a diferença será tratada como excedente "Não Detalhado".</div>
+                     </div>
+                   </div>
+
+                   <div className="neo-card" style={{ backgroundColor: "var(--surface-low)", padding: 24 }}>
+                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                       <h3 style={{ fontSize: "1.2rem", fontWeight: 800 }}>Itens da Fatura (Parcial)</h3>
+                       <button onClick={addInvoiceCreditItem} className="neo-btn" style={{ padding: "8px 16px", backgroundColor: "#ffffff", display: "flex", alignItems: "center", gap: 8 }}>
+                         <span className="material-symbols-outlined">add</span> Novo Item
+                       </button>
+                     </div>
+
+                     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxHeight: "300px", overflowY: "auto", paddingRight: 8 }}>
+                       {invoiceForm.creditItems.map((ci, idx) => (
+                         <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 1fr 0.5fr 0.5fr", gap: 8, alignItems: "center" }}>
+                           <input className="neo-input" placeholder="O que (Categoria)" value={ci.category} onChange={e => updateInvoiceCreditItem(idx, "category", e.target.value)} style={{ padding: "8px" }} />
+                           <input className="neo-input" placeholder="Detalhes (Opcional)" value={ci.desc} onChange={e => updateInvoiceCreditItem(idx, "desc", e.target.value)} style={{ padding: "8px" }} />
+                           
+                           <select className="neo-select" value={ci.type} onChange={e => updateInvoiceCreditItem(idx, "type", e.target.value)} style={{ padding: "8px" }}>
+                             <option value="variavel">Variável/Parcelado</option>
+                             <option value="fixa">Fixa Mensal (Eterna)</option>
+                           </select>
+
+                           <div style={{ position: "relative" }}>
+                             <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontWeight: 800 }}>R$</span>
+                             <input className="neo-input" placeholder="Val." type="number" value={ci.amount} onChange={e => updateInvoiceCreditItem(idx, "amount", e.target.value)} style={{ padding: "8px 8px 8px 32px" }} />
+                           </div>
+
+                           <input 
+                             className="neo-input" 
+                             placeholder="Meses" 
+                             type="number" 
+                             value={ci.type === "fixa" ? "12" : ci.months} 
+                             disabled={ci.type === "fixa"}
+                             onChange={e => updateInvoiceCreditItem(idx, "months", e.target.value)} 
+                             style={{ padding: "8px", backgroundColor: ci.type === "fixa" ? "var(--surface-lowest)" : "transparent" }} 
+                           />
+
+                           <button onClick={() => removeInvoiceCreditItem(idx)} className="neo-btn" style={{ padding: "8px", backgroundColor: "var(--error)", display: "flex", justifyContent: "center" }}>
+                             <span className="material-symbols-outlined">delete</span>
+                           </button>
+                         </div>
+                       ))}
+                       {invoiceForm.creditItems.length === 0 && <div style={{ opacity: 0.7, fontStyle: "italic", textAlign: "center" }}>Todos os itens foram inseridos pela soma Fatura Fixa vs Fatura Parcial automaticamente ou listos sem detalhar.</div>}
+                     </div>
+                   </div>
+
+                   <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
+                     <button onClick={() => setShowInvoiceModal(false)} className="neo-btn" style={{ backgroundColor: "#ffffff", flex: 1 }}>Cancelar</button>
+                     <button onClick={saveInvoice} className="neo-btn" style={{ backgroundColor: "var(--primary)", flex: 2 }}>Salvar Lançamentos e Fatura</button>
+                   </div>
+                 </div>
+               );
+            })()}
           </div>
         </div>
       )}
