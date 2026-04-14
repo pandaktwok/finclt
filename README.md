@@ -30,6 +30,6 @@ Para publicar:
    ```bash
    docker-compose up -d --build
    ```
-3. O app estará disponível na porta `8080`.
+3. O app estará disponível na porta `5001`.
 
 Caso queira alterar a porta de saída, modifique a seção `ports`, no arquivo `docker-compose.yml`.
