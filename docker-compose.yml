@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   dashboard-financeiro:
+    image: finp-dashboard:latest
     build: .
     container_name: dashboard-financeiro
     restart: unless-stopped
@@ -9,3 +10,26 @@ services:
       - "5001:80"
     environment:
       - TZ=America/Sao_Paulo
+    x-casaos:
+      ports:
+        - container: "80"
+          description:
+            en_us: "Web UI"
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: dashboard-financeiro
+  description:
+    en_us: "Dashboard Financeiro - FinP"
+  tagline:
+    en_us: "Dashboard"
+  developer: "pandaktwok"
+  author: "pandaktwok"
+  icon: "https://raw.githubusercontent.com/pandaktwok/finclt/main/public/favicon.svg"
+  title:
+    en_us: "FinCLT Dashboard"
+  category: "Finance"
+  port_map: "5001"
+  index: "/"
