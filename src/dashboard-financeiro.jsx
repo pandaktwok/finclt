@@ -558,70 +558,92 @@ export default function FinanceiroDashboard() {
           </div>
         )}
 
-        {/* LISTA DE TODAS (Receitas e Despesas combinadas) */}
-        {activeTab === "lista" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingBottom: 16, borderBottom: "var(--stroke)" }}>
-              <h2 style={{ fontSize: "2rem", margin: 0 }}>Todas as Entradas e Saídas</h2>
-              <div style={{ display: "flex", gap: 12 }}>
-                <span className="tag-chip" style={{ backgroundColor: "var(--secondary)" }}>Receitas: {incomes.length}</span>
-                <span className="tag-chip" style={{ backgroundColor: "var(--error)" }}>Despesas: {expenses.length}</span>
+        {/* LISTA DE TODAS (Receitas e Despesas separadas) */}
+        {activeTab === "lista" && (() => {
+          const renderCard = (item) => (
+            <div key={`${item.isIncome ? 'inc' : 'exp'}-${item.id}`} className="neo-card" style={{ backgroundColor: "#ffffff", position: "relative", padding: "24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <button onClick={() => item.isIncome ? deleteIncome(item.id) : deleteExpense(item.id)} style={{ position: "absolute", top: 16, right: 16, background: "var(--error)", border: "var(--stroke)", borderRadius: "var(--radius-sm)", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>delete</span>
+              </button>
+
+              {item.isIncome && (
+                <button onClick={() => openIncomeModal(item)} style={{ position: "absolute", top: 16, right: 56, background: "var(--primary)", border: "var(--stroke)", borderRadius: "var(--radius-sm)", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>edit</span>
+                </button>
+              )}
+              
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 24, height: 24, backgroundColor: item.color, border: "var(--stroke)", borderRadius: "50%", boxShadow: "2px 2px 0 #0e0f09" }} />
+                <h3 style={{ fontSize: "1.4rem", fontWeight: 800, margin: 0, paddingRight: item.isIncome ? 76 : 36 }}>{item.name}</h3>
+              </div>
+              
+              <div className="display-num" style={{ fontSize: "2rem", fontWeight: 800, color: item.isIncome ? "var(--secondary)" : "inherit" }}>
+                {item.isIncome ? "+ " : "- "} R$ {item.amount.toFixed(2)}
+              </div>
+              
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "2px dashed var(--border-color)", paddingTop: 16 }}>
+                <span className="tag-chip" style={{ backgroundColor: item.isIncome ? "var(--secondary)" : "var(--error)" }}>
+                   {item.isIncome ? "Receita" : "Despesa"}
+                </span>
+                <span className="tag-chip" style={{ backgroundColor: "var(--surface-low)" }}>{item.type || item.entryType}</span>
+                
+                {item.isIncome ? (
+                   <span className="tag-chip">{MONTHS[item.startMonth]} → {MONTHS[item.endMonth]}</span>
+                ) : (
+                   item.entryType !== "cartao" ? (
+                     <span className="tag-chip">{MONTHS[item.startMonth]} → {MONTHS[(item.startMonth + item.months - 1) % 12]}</span>
+                   ) : (
+                     <span className="tag-chip">Dia {item.dueDay}</span>
+                   )
+                )}
               </div>
             </div>
-            
-            {expenses.length === 0 && incomes.length === 0 ? (
-              <div className="neo-card" style={{ textAlign: "center", padding: "64px 20px" }}>
-                <h3>Nenhum registro cadastrado</h3>
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 24 }}>
-                {[
-                  ...incomes.map(i => ({ ...i, isIncome: true })),
-                  ...expenses.map(e => ({ ...e, isIncome: false }))
-                ].sort((a, b) => b.id - a.id).map(item => (
-                  <div key={`${item.isIncome ? 'inc' : 'exp'}-${item.id}`} className="neo-card" style={{ backgroundColor: "#ffffff", position: "relative", padding: "24px", display: "flex", flexDirection: "column", gap: 16 }}>
-                    
-                    <button onClick={() => item.isIncome ? deleteIncome(item.id) : deleteExpense(item.id)} style={{ position: "absolute", top: 16, right: 16, background: "var(--error)", border: "var(--stroke)", borderRadius: "var(--radius-sm)", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>delete</span>
-                    </button>
+          );
 
-                    {item.isIncome && (
-                      <button onClick={() => openIncomeModal(item)} style={{ position: "absolute", top: 16, right: 56, background: "var(--primary)", border: "var(--stroke)", borderRadius: "var(--radius-sm)", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>edit</span>
-                      </button>
-                    )}
-                    
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 24, height: 24, backgroundColor: item.color, border: "var(--stroke)", borderRadius: "50%", boxShadow: "2px 2px 0 #0e0f09" }} />
-                      <h3 style={{ fontSize: "1.4rem", fontWeight: 800, margin: 0, paddingRight: item.isIncome ? 76 : 36 }}>{item.name}</h3>
-                    </div>
-                    
-                    <div className="display-num" style={{ fontSize: "2rem", fontWeight: 800, color: item.isIncome ? "var(--secondary)" : "inherit" }}>
-                      {item.isIncome ? "+ " : "- "} R$ {item.amount.toFixed(2)}
-                    </div>
-                    
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "2px dashed var(--border-color)", paddingTop: 16 }}>
-                      <span className="tag-chip" style={{ backgroundColor: item.isIncome ? "var(--secondary)" : "var(--error)" }}>
-                         {item.isIncome ? "Receita" : "Despesa"}
-                      </span>
-                      <span className="tag-chip" style={{ backgroundColor: "var(--surface-low)" }}>{item.type || item.entryType}</span>
-                      
-                      {item.isIncome ? (
-                         <span className="tag-chip">{MONTHS[item.startMonth]} → {MONTHS[item.endMonth]}</span>
-                      ) : (
-                         item.entryType !== "cartao" ? (
-                           <span className="tag-chip">{MONTHS[item.startMonth]} → {MONTHS[(item.startMonth + item.months - 1) % 12]}</span>
-                         ) : (
-                           <span className="tag-chip">Dia {item.dueDay}</span>
-                         )
-                      )}
-                    </div>
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 48 }}>
+              {/* === RECEITAS === */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingBottom: 16, borderBottom: "4px solid var(--secondary)" }}>
+                  <h2 style={{ fontSize: "2rem", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="material-symbols-outlined">payments</span> Receitas
+                  </h2>
+                  <span className="tag-chip" style={{ backgroundColor: "var(--secondary)", fontSize: "1rem" }}>Total: {incomes.length}</span>
+                </div>
+                
+                {incomes.length === 0 ? (
+                  <div className="neo-card" style={{ textAlign: "center", padding: "40px 20px" }}>
+                    <h3>Nenhuma receita cadastrada</h3>
                   </div>
-                ))}
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 24 }}>
+                    {incomes.map(i => ({ ...i, isIncome: true })).sort((a, b) => b.id - a.id).map(renderCard)}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
+
+              {/* === DESPESAS === */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingBottom: 16, borderBottom: "4px solid var(--error)" }}>
+                  <h2 style={{ fontSize: "2rem", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="material-symbols-outlined">receipt_long</span> Despesas
+                  </h2>
+                  <span className="tag-chip" style={{ backgroundColor: "var(--error)", fontSize: "1rem" }}>Total: {expenses.length}</span>
+                </div>
+                
+                {expenses.length === 0 ? (
+                  <div className="neo-card" style={{ textAlign: "center", padding: "40px 20px" }}>
+                    <h3>Nenhuma despesa cadastrada</h3>
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 24 }}>
+                    {expenses.map(e => ({ ...e, isIncome: false })).sort((a, b) => b.id - a.id).map(renderCard)}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ESTATÍSTICAS (Antiga "Receitas") */}
         {activeTab === "estatisticas" && (
